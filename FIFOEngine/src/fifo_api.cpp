@@ -146,6 +146,38 @@ FIFO_API int fifo_generate_test_data(const char* root_path, double size_gb, Prog
     return generate_test_data(g_db, root_path, size_gb, cb);
 }
 
+FIFO_API int fifo_generate_one_day(const char* root_path, double day_size_mb,
+                                   int day_offset, ProgressCallback cb) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (!g_db.is_open()) return FIFO_ERR_DB;
+    return generate_one_day(g_db, root_path, day_size_mb, day_offset, cb);
+}
+
+FIFO_API int fifo_get_weights(WeightInfo* buf, int buf_size, int* out_count) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (!g_db.is_open()) return FIFO_ERR_DB;
+    auto weights = g_db.get_average_weights(14);
+    int count = (int)weights.size();
+    if (count > buf_size) count = buf_size;
+    for (int i = 0; i < count; ++i) {
+        memset(&buf[i], 0, sizeof(WeightInfo));
+        strncpy(buf[i].asset, weights[i].asset.c_str(), 63);
+        buf[i].index_val = weights[i].index_val;
+        buf[i].category = weights[i].category;
+        buf[i].avg_mb = weights[i].avg_mb;
+        buf[i].total_mb = weights[i].total_mb;
+        buf[i].day_count = weights[i].day_count;
+    }
+    if (out_count) *out_count = count;
+    return FIFO_OK;
+}
+
+FIFO_API int fifo_get_history_day_count() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (!g_db.is_open()) return 0;
+    return g_db.get_history_day_count();
+}
+
 FIFO_API int fifo_schedule_start(const char* root, int granularity,
                                  double limit_mb, double target_pct,
                                  int hour, int minute) {
@@ -158,6 +190,7 @@ FIFO_API int fifo_schedule_start(const char* root, int granularity,
     cfg.target_pct = target_pct;
     cfg.hour = hour;
     cfg.minute = minute;
+    cfg.interval_minutes = 0;
 
     g_scheduler.start(cfg, g_db_path);
     return FIFO_OK;
@@ -165,6 +198,24 @@ FIFO_API int fifo_schedule_start(const char* root, int granularity,
 
 FIFO_API int fifo_schedule_stop() {
     g_scheduler.stop();
+    return FIFO_OK;
+}
+
+FIFO_API int fifo_schedule_start_interval(const char* root, int granularity,
+                                          double limit_mb, double target_pct,
+                                          int interval_minutes) {
+    if (g_scheduler.is_running()) return FIFO_ERR_BUSY;
+
+    SchedulerConfig cfg;
+    cfg.root_path = root;
+    cfg.granularity = granularity;
+    cfg.limit_mb = limit_mb;
+    cfg.target_pct = target_pct;
+    cfg.hour = 0;
+    cfg.minute = 0;
+    cfg.interval_minutes = interval_minutes;
+
+    g_scheduler.start(cfg, g_db_path);
     return FIFO_OK;
 }
 

@@ -42,6 +42,20 @@ namespace FIFOManagement.Interop
         };
     }
 
+    [StructLayout(LayoutKind.Sequential, Pack = 8, CharSet = CharSet.Ansi)]
+    public struct WeightInfo
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string Asset;
+        public int IndexVal;
+        public byte Category;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
+        public byte[] Pad;
+        public double AvgMB;
+        public double TotalMB;
+        public int DayCount;
+    }
+
     [StructLayout(LayoutKind.Sequential, Pack = 8)]
     public struct ForecastResult
     {
@@ -134,10 +148,28 @@ namespace FIFOManagement.Interop
             double sizeGb, ProgressCallback cb);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int fifo_generate_one_day(
+            [MarshalAs(UnmanagedType.LPStr)] string rootPath,
+            double daySizeMb, int dayOffset, ProgressCallback cb);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int fifo_get_weights(
+            [Out] WeightInfo[] buf, int bufSize, out int outCount);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int fifo_get_history_day_count();
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int fifo_schedule_start(
             [MarshalAs(UnmanagedType.LPStr)] string root,
             int granularity, double limitMb, double targetPct,
             int hour, int minute);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int fifo_schedule_start_interval(
+            [MarshalAs(UnmanagedType.LPStr)] string root,
+            int granularity, double limitMb, double targetPct,
+            int intervalMinutes);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int fifo_schedule_stop();

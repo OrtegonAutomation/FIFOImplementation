@@ -15,6 +15,15 @@ struct StorageRecord {
     int         file_count;
 };
 
+struct WeightRecord {
+    std::string asset;
+    int         index_val;
+    char        category;
+    double      avg_mb;
+    double      total_mb;
+    int         day_count;
+};
+
 struct FileRecord {
     std::string path;
     double      size_mb;
@@ -49,6 +58,8 @@ public:
     std::vector<StorageRecord> get_history(int days, const std::string& asset = "",
                                            int index_val = -1, char category = '*');
     double get_total_current_mb();
+    std::vector<WeightRecord> get_average_weights(int days = 14);
+    int get_history_day_count();
 
     // Forecast
     int insert_forecast(const std::string& date, double predicted_mb);

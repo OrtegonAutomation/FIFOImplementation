@@ -215,3 +215,43 @@ std::string Database::get_config(const std::string& key, const std::string& defa
     sqlite3_finalize(stmt);
     return val;
 }
+
+std::vector<WeightRecord> Database::get_average_weights(int days) {
+    std::vector<WeightRecord> result;
+    std::string sql =
+        "SELECT asset, index_val, category, "
+        "AVG(size_mb) as avg_mb, SUM(size_mb) as total_mb, "
+        "COUNT(DISTINCT measurement_date) as day_count "
+        "FROM storage_history "
+        "WHERE measurement_date >= date('now','localtime','-" + std::to_string(days) + " days') "
+        "GROUP BY asset, index_val, category "
+        "ORDER BY asset, index_val, category";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) return result;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        WeightRecord w;
+        const char* a = (const char*)sqlite3_column_text(stmt, 0);
+        w.asset = a ? a : "";
+        w.index_val = sqlite3_column_int(stmt, 1);
+        const char* c = (const char*)sqlite3_column_text(stmt, 2);
+        w.category = c ? c[0] : '*';
+        w.avg_mb = sqlite3_column_double(stmt, 3);
+        w.total_mb = sqlite3_column_double(stmt, 4);
+        w.day_count = sqlite3_column_int(stmt, 5);
+        result.push_back(w);
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+int Database::get_history_day_count() {
+    const char* sql = "SELECT COUNT(DISTINCT measurement_date) FROM storage_history";
+    sqlite3_stmt* stmt = nullptr;
+    int count = 0;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+            count = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return count;
+}

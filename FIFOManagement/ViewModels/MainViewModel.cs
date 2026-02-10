@@ -1,4 +1,6 @@
 using System;
+using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
@@ -8,6 +10,16 @@ using FIFOManagement.Services;
 
 namespace FIFOManagement.ViewModels
 {
+    public class WeightRow
+    {
+        public string Asset { get; set; } = "";
+        public int Index { get; set; }
+        public string Category { get; set; } = "";
+        public double AvgMB { get; set; }
+        public double TotalMB { get; set; }
+        public int Days { get; set; }
+    }
+
     public class MainViewModel : ViewModelBase
     {
         private readonly EngineService _engine = new();
@@ -19,6 +31,9 @@ namespace FIFOManagement.ViewModels
         private int _scheduleHour = 3;
         private int _scheduleMinute = 0;
         private double _testDataSizeGB = 2.0;
+        private double _oneDaySizeMB = 150.0;
+        private int _intervalMinutes = 60;
+        private bool _useIntervalMode;
 
         // State
         private string _statusMessage = "Ready — Initialize engine to begin";
@@ -26,6 +41,7 @@ namespace FIFOManagement.ViewModels
         private bool _isExecuting;
         private bool _isScheduleActive;
         private int _progressPercent;
+        private int _dayCounter;
 
         // Forecast dashboard
         private double _currentStorageMB;
@@ -39,6 +55,9 @@ namespace FIFOManagement.ViewModels
         private int _lastFilesDeleted;
         private double _lastMBFreed;
 
+        // Weights table
+        public ObservableCollection<WeightRow> Weights { get; } = new();
+
         // Properties — Config
         public string RootPath { get => _rootPath; set => SetProperty(ref _rootPath, value); }
         public double StorageLimitGB { get => _storageLimitGB; set => SetProperty(ref _storageLimitGB, value); }
@@ -46,6 +65,9 @@ namespace FIFOManagement.ViewModels
         public int ScheduleHour { get => _scheduleHour; set => SetProperty(ref _scheduleHour, value); }
         public int ScheduleMinute { get => _scheduleMinute; set => SetProperty(ref _scheduleMinute, value); }
         public double TestDataSizeGB { get => _testDataSizeGB; set => SetProperty(ref _testDataSizeGB, value); }
+        public double OneDaySizeMB { get => _oneDaySizeMB; set => SetProperty(ref _oneDaySizeMB, value); }
+        public int IntervalMinutes { get => _intervalMinutes; set => SetProperty(ref _intervalMinutes, value); }
+        public bool UseIntervalMode { get => _useIntervalMode; set => SetProperty(ref _useIntervalMode, value); }
 
         // Properties — State
         public string StatusMessage { get => _statusMessage; set => SetProperty(ref _statusMessage, value); }
@@ -53,6 +75,7 @@ namespace FIFOManagement.ViewModels
         public bool IsExecuting { get => _isExecuting; set { SetProperty(ref _isExecuting, value); CommandManager.InvalidateRequerySuggested(); } }
         public bool IsScheduleActive { get => _isScheduleActive; set { SetProperty(ref _isScheduleActive, value); CommandManager.InvalidateRequerySuggested(); } }
         public int ProgressPercent { get => _progressPercent; set => SetProperty(ref _progressPercent, value); }
+        public int DayCounter { get => _dayCounter; set => SetProperty(ref _dayCounter, value); }
 
         // Properties — Dashboard
         public double CurrentStorageMB { get => _currentStorageMB; set => SetProperty(ref _currentStorageMB, value); }
@@ -71,7 +94,9 @@ namespace FIFOManagement.ViewModels
         public ICommand BrowsePathCommand { get; }
         public ICommand ExecuteNowCommand { get; }
         public ICommand GenerateTestDataCommand { get; }
+        public ICommand GenerateOneDayCommand { get; }
         public ICommand ToggleScheduleCommand { get; }
+        public ICommand RefreshWeightsCommand { get; }
 
         public MainViewModel()
         {
@@ -79,7 +104,9 @@ namespace FIFOManagement.ViewModels
             BrowsePathCommand = new RelayCommand(BrowsePath);
             ExecuteNowCommand = new RelayCommand(ExecuteNow, () => IsInitialized && !IsExecuting);
             GenerateTestDataCommand = new RelayCommand(GenerateTestData, () => IsInitialized && !IsExecuting);
+            GenerateOneDayCommand = new RelayCommand(GenerateOneDay, () => IsInitialized && !IsExecuting);
             ToggleScheduleCommand = new RelayCommand(ToggleSchedule, () => IsInitialized && !IsExecuting);
+            RefreshWeightsCommand = new RelayCommand(RefreshWeights, () => IsInitialized);
         }
 
         private async void InitializeEngine()
@@ -102,14 +129,15 @@ namespace FIFOManagement.ViewModels
                 string savedRoot = _engine.GetConfig("root_path");
                 if (!string.IsNullOrEmpty(savedRoot)) RootPath = savedRoot;
                 string savedLimit = _engine.GetConfig("storage_limit_gb");
-                if (double.TryParse(savedLimit, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out double lim))
+                if (double.TryParse(savedLimit, NumberStyles.Any, CultureInfo.InvariantCulture, out double lim))
                     StorageLimitGB = lim;
                 string savedGran = _engine.GetConfig("granularity");
                 if (int.TryParse(savedGran, out int g)) Granularity = g;
 
+                DayCounter = _engine.GetHistoryDayCount();
                 IsInitialized = true;
-                StatusMessage = "Engine initialized — Configure root path and execute";
+                RefreshWeights();
+                StatusMessage = $"Engine initialized — {DayCounter} days of history in DB";
             }
             catch (Exception ex)
             {
@@ -133,15 +161,20 @@ namespace FIFOManagement.ViewModels
             }
 
             IsExecuting = true;
-            StatusMessage = "Executing pipeline: Scan → Forecast → Evaluate → Cleanup...";
+            StatusMessage = "Forcing cleanup: Scan → Delete oldest files to target...";
             try
             {
                 SaveConfig();
                 double limitMb = StorageLimitGB * 1024.0;
-                var result = await _engine.ExecuteFullAsync(RootPath, Granularity, limitMb, 0.70);
-                UpdateDashboard(result);
-                StatusMessage = $"Pipeline complete — {FIFOAction.ToLabel(result.Action)} | " +
-                                $"Deleted {result.FilesDeleted} files ({result.MBFreed:F1} MB freed)";
+                var result = await _engine.ForceCleanupAsync(RootPath, Granularity, limitMb, 0.70);
+                LastFilesDeleted = result.FilesDeleted;
+                LastMBFreed = result.MBFreed;
+                CurrentStorageMB = result.NewUsageMB;
+                UsagePct = result.NewUsagePct;
+                LastRun = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                DayCounter = _engine.GetHistoryDayCount();
+                RefreshWeights();
+                StatusMessage = $"Forced cleanup done — Deleted {result.FilesDeleted} files ({result.MBFreed:F1} MB freed)";
             }
             catch (EngineException ex)
             {
@@ -167,7 +200,7 @@ namespace FIFOManagement.ViewModels
 
             IsExecuting = true;
             ProgressPercent = 0;
-            StatusMessage = "Generating test data...";
+            StatusMessage = "Generating 14 days of test data...";
             try
             {
                 SaveConfig();
@@ -180,10 +213,73 @@ namespace FIFOManagement.ViewModels
                     });
                 });
 
-                if (rc == FIFOError.OK)
-                    StatusMessage = $"Test data generated ({TestDataSizeGB:F1} GB) in {RootPath}";
-                else
+                DayCounter = _engine.GetHistoryDayCount();
+
+                if (rc != FIFOError.OK)
+                {
                     StatusMessage = $"Data generation failed (code {rc})";
+                    return;
+                }
+
+                // Run FIFO pipeline after new data
+                StatusMessage = "Running FIFO algorithm: Scan → Forecast → Cleanup if needed...";
+                double limitMb = StorageLimitGB * 1024.0;
+                var result = await _engine.ExecuteFullAsync(RootPath, Granularity, limitMb, 0.70);
+                UpdateDashboard(result);
+                RefreshWeights();
+                StatusMessage = $"14 days generated — {FIFOAction.ToLabel(result.Action)} | " +
+                                $"Deleted {result.FilesDeleted} files ({result.MBFreed:F1} MB freed)";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                IsExecuting = false;
+                ProgressPercent = 0;
+            }
+        }
+
+        private async void GenerateOneDay()
+        {
+            if (string.IsNullOrWhiteSpace(RootPath))
+            {
+                StatusMessage = "Please set a root path first";
+                return;
+            }
+
+            IsExecuting = true;
+            ProgressPercent = 0;
+            StatusMessage = "Generating 1 day of data...";
+            try
+            {
+                SaveConfig();
+                int rc = await _engine.GenerateOneDayAsync(RootPath, OneDaySizeMB, 0, (pct, msg) =>
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        ProgressPercent = pct;
+                        StatusMessage = $"Generating: {msg} ({pct}%)";
+                    });
+                });
+
+                DayCounter = _engine.GetHistoryDayCount();
+
+                if (rc != FIFOError.OK)
+                {
+                    StatusMessage = $"One-day generation failed (code {rc})";
+                    return;
+                }
+
+                // Run FIFO pipeline after new data
+                StatusMessage = "Running FIFO algorithm: Scan → Forecast → Cleanup if needed...";
+                double limitMb = StorageLimitGB * 1024.0;
+                var result = await _engine.ExecuteFullAsync(RootPath, Granularity, limitMb, 0.70);
+                UpdateDashboard(result);
+                RefreshWeights();
+                StatusMessage = $"1 day generated — {FIFOAction.ToLabel(result.Action)} | " +
+                                $"Deleted {result.FilesDeleted} files ({result.MBFreed:F1} MB freed)";
             }
             catch (Exception ex)
             {
@@ -214,18 +310,52 @@ namespace FIFOManagement.ViewModels
                 }
                 SaveConfig();
                 double limitMb = StorageLimitGB * 1024.0;
-                int rc = _engine.StartSchedule(RootPath, Granularity, limitMb, 0.70, ScheduleHour, ScheduleMinute);
-                if (rc == FIFOError.OK)
+                int rc;
+                if (UseIntervalMode)
                 {
-                    IsScheduleActive = true;
-                    RefreshStatus();
-                    StatusMessage = $"Schedule started — Daily at {ScheduleHour:D2}:{ScheduleMinute:D2}";
+                    rc = _engine.StartScheduleInterval(RootPath, Granularity, limitMb, 0.70, IntervalMinutes);
+                    if (rc == FIFOError.OK)
+                    {
+                        IsScheduleActive = true;
+                        RefreshStatus();
+                        StatusMessage = $"Schedule started — Every {IntervalMinutes} min";
+                    }
                 }
                 else
                 {
+                    rc = _engine.StartSchedule(RootPath, Granularity, limitMb, 0.70, ScheduleHour, ScheduleMinute);
+                    if (rc == FIFOError.OK)
+                    {
+                        IsScheduleActive = true;
+                        RefreshStatus();
+                        StatusMessage = $"Schedule started — Daily at {ScheduleHour:D2}:{ScheduleMinute:D2}";
+                    }
+                }
+                if (rc != FIFOError.OK)
                     StatusMessage = $"Failed to start schedule (code {rc})";
+            }
+        }
+
+        private void RefreshWeights()
+        {
+            try
+            {
+                var weights = _engine.GetWeights();
+                Weights.Clear();
+                foreach (var w in weights)
+                {
+                    Weights.Add(new WeightRow
+                    {
+                        Asset = w.Asset ?? "",
+                        Index = w.IndexVal,
+                        Category = w.Category == 0 ? "*" : ((char)w.Category).ToString(),
+                        AvgMB = w.AvgMB,
+                        TotalMB = w.TotalMB,
+                        Days = w.DayCount
+                    });
                 }
             }
+            catch { }
         }
 
         private void UpdateDashboard(FullResult r)
@@ -239,6 +369,7 @@ namespace FIFOManagement.ViewModels
             LastFilesDeleted = r.FilesDeleted;
             LastMBFreed = r.MBFreed;
             LastRun = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            DayCounter = _engine.GetHistoryDayCount();
         }
 
         private void RefreshStatus()
@@ -258,7 +389,7 @@ namespace FIFOManagement.ViewModels
             if (!_engine.IsInitialized) return;
             _engine.SetConfig("root_path", RootPath);
             _engine.SetConfig("storage_limit_gb",
-                StorageLimitGB.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                StorageLimitGB.ToString(CultureInfo.InvariantCulture));
             _engine.SetConfig("granularity", Granularity.ToString());
         }
     }

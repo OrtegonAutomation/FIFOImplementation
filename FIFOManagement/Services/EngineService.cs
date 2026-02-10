@@ -69,9 +69,57 @@ namespace FIFOManagement.Services
             });
         }
 
+        public Task<int> GenerateOneDayAsync(string rootPath, double daySizeMb, int dayOffset, Action<int, string>? progress = null)
+        {
+            return Task.Run(() =>
+            {
+                _progressDelegate = (pct, msg) => progress?.Invoke(pct, msg);
+                int rc = FIFONative.fifo_generate_one_day(rootPath, daySizeMb, dayOffset, _progressDelegate);
+                _progressDelegate = null;
+                return rc;
+            });
+        }
+
+        public Task<CleanupResult> ForceCleanupAsync(string rootPath, int granularity, double limitMb, double targetPct)
+        {
+            return Task.Run(() =>
+            {
+                int rc = FIFONative.fifo_scan(rootPath, granularity);
+                if (rc != FIFOError.OK && rc != FIFOError.ERR_NODATA)
+                    throw new EngineException($"Scan failed (code {rc})", rc);
+
+                var result = new CleanupResult();
+                rc = FIFONative.fifo_cleanup(limitMb, targetPct, ref result);
+                if (rc != FIFOError.OK)
+                    throw new EngineException($"Cleanup failed (code {rc})", rc);
+                return result;
+            });
+        }
+
+        public WeightInfo[] GetWeights()
+        {
+            var buf = new WeightInfo[200];
+            int count;
+            int rc = FIFONative.fifo_get_weights(buf, buf.Length, out count);
+            if (rc != FIFOError.OK) return Array.Empty<WeightInfo>();
+            var result = new WeightInfo[count];
+            Array.Copy(buf, result, count);
+            return result;
+        }
+
+        public int GetHistoryDayCount()
+        {
+            return FIFONative.fifo_get_history_day_count();
+        }
+
         public int StartSchedule(string rootPath, int granularity, double limitMb, double targetPct, int hour, int minute)
         {
             return FIFONative.fifo_schedule_start(rootPath, granularity, limitMb, targetPct, hour, minute);
+        }
+
+        public int StartScheduleInterval(string rootPath, int granularity, double limitMb, double targetPct, int intervalMinutes)
+        {
+            return FIFONative.fifo_schedule_start_interval(rootPath, granularity, limitMb, targetPct, intervalMinutes);
         }
 
         public int StopSchedule()

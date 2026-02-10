@@ -31,20 +31,24 @@ std::string Scheduler::next_run() const {
     struct tm lt;
     localtime_s(&lt, &now);
 
-    // Calculate next run time
-    struct tm next = lt;
-    next.tm_hour = config_.hour;
-    next.tm_min = config_.minute;
-    next.tm_sec = 0;
+    time_t next_t;
+    if (config_.interval_minutes > 0) {
+        next_t = now + config_.interval_minutes * 60;
+    } else {
+        struct tm next = lt;
+        next.tm_hour = config_.hour;
+        next.tm_min = config_.minute;
+        next.tm_sec = 0;
+        next_t = mktime(&next);
+        if (next_t <= now) next_t += 86400;
+    }
 
-    time_t next_t = mktime(&next);
-    if (next_t <= now) next_t += 86400; // tomorrow
-
-    localtime_s(&next, &next_t);
+    struct tm nr;
+    localtime_s(&nr, &next_t);
     char buf[32];
     snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d",
-             next.tm_year + 1900, next.tm_mon + 1, next.tm_mday,
-             next.tm_hour, next.tm_min);
+             nr.tm_year + 1900, nr.tm_mon + 1, nr.tm_mday,
+             nr.tm_hour, nr.tm_min);
     return buf;
 }
 
@@ -89,19 +93,21 @@ int Scheduler::execute_once(const std::string& db_path, const SchedulerConfig& c
 
 void Scheduler::run_loop() {
     while (running_.load()) {
-        time_t now = time(nullptr);
-        struct tm lt;
-        localtime_s(&lt, &now);
-
-        // Calculate seconds until next scheduled time
-        struct tm target = lt;
-        target.tm_hour = config_.hour;
-        target.tm_min = config_.minute;
-        target.tm_sec = 0;
-        time_t target_t = mktime(&target);
-        if (target_t <= now) target_t += 86400;
-
-        long wait_secs = (long)(target_t - now);
+        long wait_secs;
+        if (config_.interval_minutes > 0) {
+            wait_secs = config_.interval_minutes * 60;
+        } else {
+            time_t now = time(nullptr);
+            struct tm lt;
+            localtime_s(&lt, &now);
+            struct tm target = lt;
+            target.tm_hour = config_.hour;
+            target.tm_min = config_.minute;
+            target.tm_sec = 0;
+            time_t target_t = mktime(&target);
+            if (target_t <= now) target_t += 86400;
+            wait_secs = (long)(target_t - now);
+        }
 
         // Sleep in 1-second increments to allow stop()
         for (long i = 0; i < wait_secs && running_.load(); ++i) {
@@ -114,7 +120,8 @@ void Scheduler::run_loop() {
         execute_once(db_path_, config_);
 
         // Record last run
-        now = time(nullptr);
+        time_t now = time(nullptr);
+        struct tm lt;
         localtime_s(&lt, &now);
         char ts[32];
         snprintf(ts, sizeof(ts), "%04d-%02d-%02d %02d:%02d:%02d",

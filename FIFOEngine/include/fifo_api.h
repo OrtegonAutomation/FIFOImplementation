@@ -39,6 +39,16 @@ typedef void (*ProgressCallback)(int percent, const char* message);
 #pragma pack(push, 8)
 
 typedef struct {
+    char   asset[64];
+    int    index_val;
+    char   category;
+    char   _pad[3];
+    double avg_mb;
+    double total_mb;
+    int    day_count;
+} WeightInfo;
+
+typedef struct {
     double current_mb;
     double predicted_mb;
     double growth_rate_mb_per_day;
@@ -98,11 +108,20 @@ FIFO_API int fifo_execute_full(const char* root, int granularity, double limit_m
 // Test data
 FIFO_API int fifo_generate_test_data(const char* root_path, double size_gb,
                                      ProgressCallback cb);
+FIFO_API int fifo_generate_one_day(const char* root_path, double day_size_mb,
+                                   int day_offset, ProgressCallback cb);
+
+// Average weights query
+FIFO_API int fifo_get_weights(WeightInfo* buf, int buf_size, int* out_count);
+FIFO_API int fifo_get_history_day_count();
 
 // Scheduler
 FIFO_API int  fifo_schedule_start(const char* root, int granularity,
                                   double limit_mb, double target_pct,
                                   int hour, int minute);
+FIFO_API int  fifo_schedule_start_interval(const char* root, int granularity,
+                                           double limit_mb, double target_pct,
+                                           int interval_minutes);
 FIFO_API int  fifo_schedule_stop();
 FIFO_API int  fifo_get_status(StatusInfo* out);
 

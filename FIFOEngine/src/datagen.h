@@ -11,4 +11,10 @@
 int generate_test_data(Database& db, const std::string& root_path,
                        double size_gb, ProgressCallback cb);
 
+// Generate one day of synthetic test data (appends to existing data)
+// day_offset: 0=today, 1=tomorrow, -1=yesterday, etc.
+// day_size_mb: total MB to generate for this day spread across all entities
+int generate_one_day(Database& db, const std::string& root_path,
+                     double day_size_mb, int day_offset, ProgressCallback cb);
+
 #endif // DATAGEN_H

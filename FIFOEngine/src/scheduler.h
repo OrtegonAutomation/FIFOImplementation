@@ -13,6 +13,7 @@ struct SchedulerConfig {
     double target_pct;
     int hour;
     int minute;
+    int interval_minutes;  // 0 = daily mode, >0 = interval mode
 };
 
 class Scheduler {
