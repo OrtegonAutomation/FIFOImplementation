@@ -1,0 +1,231 @@
+<Window x:Class="FIFOManagement.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FIFOManagement.ViewModels"
+        Title="Predictive FIFO Storage Manager" Height="750" Width="1000"
+        WindowStartupLocation="CenterScreen" Background="#1e1e2e">
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+    <Window.Resources>
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="#2a2a3d"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="4"/>
+        </Style>
+        <Style x:Key="AccentBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="18,10"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.5"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="LabelText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#a0a0b8"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style x:Key="ValueText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#e0e0ff"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Style="{StaticResource CardBorder}" Background="#3b3b5c" Margin="4,4,4,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Predictive FIFO Storage Manager" FontSize="22" FontWeight="Bold" Foreground="#e0e0ff"/>
+                    <TextBlock Text="C++ Native Engine — Scan · Forecast · Cleanup" Foreground="#8888aa" FontSize="12" Margin="0,4,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Initialize Engine" Command="{Binding InitializeCommand}"
+                        Background="#6c5ce7" Style="{StaticResource AccentBtn}"/>
+            </Grid>
+        </Border>
+
+        <!-- Config Panel -->
+        <Border Grid.Row="1" Style="{StaticResource CardBorder}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Row 0: Root Path -->
+                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,12,8">
+                    <TextBlock Text="ROOT PATH" Style="{StaticResource LabelText}" Margin="0,0,0,4"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding RootPath, UpdateSourceTrigger=PropertyChanged}" FontSize="13"
+                                 Background="#363650" Foreground="#e0e0ff" BorderBrush="#4a4a6a" Padding="8,6"/>
+                        <Button Grid.Column="1" Content="..." Command="{Binding BrowsePathCommand}"
+                                Background="#4a4a6a" Foreground="White" Padding="10,6" Margin="4,0,0,0"
+                                BorderThickness="0" Cursor="Hand" FontWeight="Bold"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Limit -->
+                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,12,8" Width="100">
+                    <TextBlock Text="LIMIT (GB)" Style="{StaticResource LabelText}" Margin="0,0,0,4"/>
+                    <TextBox Text="{Binding StorageLimitGB, UpdateSourceTrigger=PropertyChanged}" FontSize="13"
+                             Background="#363650" Foreground="#e0e0ff" BorderBrush="#4a4a6a" Padding="8,6" HorizontalContentAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Granularity -->
+                <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,12,8" Width="140">
+                    <TextBlock Text="GRANULARITY" Style="{StaticResource LabelText}" Margin="0,0,0,4"/>
+                    <ComboBox SelectedIndex="{Binding Granularity}" FontSize="13"
+                              Background="#363650" Foreground="#e0e0ff" Padding="8,6">
+                        <ComboBoxItem Content="Asset"/>
+                        <ComboBoxItem Content="Asset + Index"/>
+                        <ComboBoxItem Content="Asset + Index + E/F"/>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Schedule time -->
+                <StackPanel Grid.Row="0" Grid.Column="3" Width="80">
+                    <TextBlock Text="SCHEDULE" Style="{StaticResource LabelText}" Margin="0,0,0,4"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox Text="{Binding ScheduleHour}" Width="30" FontSize="13"
+                                 Background="#363650" Foreground="#e0e0ff" BorderBrush="#4a4a6a" Padding="4,6" HorizontalContentAlignment="Center"/>
+                        <TextBlock Text=":" Foreground="#e0e0ff" FontSize="13" VerticalAlignment="Center" Margin="2,0"/>
+                        <TextBox Text="{Binding ScheduleMinute}" Width="30" FontSize="13"
+                                 Background="#363650" Foreground="#e0e0ff" BorderBrush="#4a4a6a" Padding="4,6" HorizontalContentAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Row 1: Test data size -->
+                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Test Data Size (GB):" Style="{StaticResource LabelText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox Text="{Binding TestDataSizeGB}" Width="50" FontSize="13"
+                             Background="#363650" Foreground="#e0e0ff" BorderBrush="#4a4a6a" Padding="4,4" HorizontalContentAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Control Buttons -->
+        <Border Grid.Row="2" Style="{StaticResource CardBorder}" Padding="8">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Content="⚡ Execute Now" Command="{Binding ExecuteNowCommand}"
+                        Background="#00b894" Style="{StaticResource AccentBtn}" Margin="4"/>
+                <Button Content="🧪 Generate Test Data" Command="{Binding GenerateTestDataCommand}"
+                        Background="#fdcb6e" Foreground="#2d3436" Style="{StaticResource AccentBtn}" Margin="4"/>
+                <Button Command="{Binding ToggleScheduleCommand}" Background="#0984e3"
+                        Style="{StaticResource AccentBtn}" Margin="4"
+                        Content="📅 Start Schedule"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Dashboard -->
+        <Grid Grid.Row="3" Margin="0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Current Storage -->
+            <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardBorder}">
+                <StackPanel>
+                    <TextBlock Text="CURRENT STORAGE" Style="{StaticResource LabelText}"/>
+                    <TextBlock Text="{Binding CurrentStorageMB, StringFormat={}{0:F1} MB}" Style="{StaticResource ValueText}"/>
+                    <TextBlock Text="{Binding UsagePct, StringFormat={}{0:F1}% used}" Foreground="#ffeaa7" FontSize="12"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Forecast -->
+            <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardBorder}">
+                <StackPanel>
+                    <TextBlock Text="FORECAST TOMORROW" Style="{StaticResource LabelText}"/>
+                    <TextBlock Text="{Binding ForecastMB, StringFormat={}{0:F1} MB}" Style="{StaticResource ValueText}"/>
+                    <TextBlock Text="{Binding GrowthRateMB, StringFormat=Growth: {0:+0.0;-0.0} MB/day}" Foreground="#74b9ff" FontSize="12"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Action -->
+            <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource CardBorder}">
+                <StackPanel>
+                    <TextBlock Text="STATUS" Style="{StaticResource LabelText}"/>
+                    <TextBlock Text="{Binding ActionLabel}" Style="{StaticResource ValueText}"/>
+                    <TextBlock Text="{Binding HistoryDays, StringFormat={}{0} days of history}" Foreground="#a29bfe" FontSize="12"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Cleanup Stats -->
+            <Border Grid.Row="0" Grid.Column="3" Style="{StaticResource CardBorder}">
+                <StackPanel>
+                    <TextBlock Text="LAST CLEANUP" Style="{StaticResource LabelText}"/>
+                    <TextBlock Text="{Binding LastFilesDeleted, StringFormat={}{0} files}" Style="{StaticResource ValueText}"/>
+                    <TextBlock Text="{Binding LastMBFreed, StringFormat={}{0:F1} MB freed}" Foreground="#55efc4" FontSize="12"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Last Run -->
+            <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource CardBorder}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Last Run: " Style="{StaticResource LabelText}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding LastRun}" Foreground="#dfe6e9" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="    |    Next Run: " Style="{StaticResource LabelText}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding NextRun}" Foreground="#dfe6e9" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Progress Bar -->
+            <Border Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Style="{StaticResource CardBorder}">
+                <StackPanel>
+                    <TextBlock Text="PROGRESS" Style="{StaticResource LabelText}" Margin="0,0,0,4"/>
+                    <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="16"
+                                 Background="#363650" Foreground="#6c5ce7"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="4" Background="#16162a" CornerRadius="6" Padding="12,8" Margin="4,4,4,0">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#b0b0cc" FontSize="12" FontFamily="Consolas"/>
+        </Border>
+    </Grid>
+</Window>
