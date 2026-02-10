@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(claude mcp add --help:*)",
+      "Bash(claude mcp add:*)"
+    ]
+  }
+}
